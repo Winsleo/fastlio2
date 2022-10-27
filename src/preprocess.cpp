@@ -84,7 +84,7 @@ void Preprocess::process(const sensor_msgs::PointCloud2::ConstPtr &msg, PointClo
   }
   *pcl_out = pl_surf;
 }
-
+//Livox雷达点云数据处理函数
 void Preprocess::avia_handler(const livox_ros_driver::CustomMsg::ConstPtr &msg)
 {
   pl_surf.clear();
@@ -101,16 +101,16 @@ void Preprocess::avia_handler(const livox_ros_driver::CustomMsg::ConstPtr &msg)
   for(int i=0; i<N_SCANS; i++)
   {
     pl_buff[i].clear();
-    pl_buff[i].reserve(plsize);
+    pl_buff[i].reserve(plsize);//pl_buff[i]代表第i线的数据
   }
   uint valid_num = 0;
   
-  if (feature_enabled)
+  if (feature_enabled)//如果要求特征提取
   {
     for(uint i=1; i<plsize; i++)
     {
       if((msg->points[i].line < N_SCANS) && ((msg->points[i].tag & 0x30) == 0x10 || (msg->points[i].tag & 0x30) == 0x00))
-      {
+      {//筛选可靠点
         pl_full[i].x = msg->points[i].x;
         pl_full[i].y = msg->points[i].y;
         pl_full[i].z = msg->points[i].z;
@@ -121,8 +121,8 @@ void Preprocess::avia_handler(const livox_ros_driver::CustomMsg::ConstPtr &msg)
         if((abs(pl_full[i].x - pl_full[i-1].x) > 1e-7) 
             || (abs(pl_full[i].y - pl_full[i-1].y) > 1e-7)
             || (abs(pl_full[i].z - pl_full[i-1].z) > 1e-7))
-        {
-          pl_buff[msg->points[i].line].push_back(pl_full[i]);
+        {//去除邻近点
+          pl_buff[msg->points[i].line].push_back(pl_full[i]);//加入对应线束的容器
         }
       }
     }
@@ -130,7 +130,7 @@ void Preprocess::avia_handler(const livox_ros_driver::CustomMsg::ConstPtr &msg)
     static double time = 0.0;
     count ++;
     double t0 = omp_get_wtime();
-    for(int j=0; j<N_SCANS; j++)
+    for(int j=0; j<N_SCANS; j++)//对于每一线的点云
     {
       if(pl_buff[j].size() <= 5) continue;
       pcl::PointCloud<PointType> &pl = pl_buff[j];
@@ -148,7 +148,7 @@ void Preprocess::avia_handler(const livox_ros_driver::CustomMsg::ConstPtr &msg)
         types[i].dista = sqrt(vx * vx + vy * vy + vz * vz);
       }
       types[plsize].range = sqrt(pl[plsize].x * pl[plsize].x + pl[plsize].y * pl[plsize].y);
-      give_feature(pl, types);
+      give_feature(pl, types);//提取特征函数
       // pl_surf += pl;
     }
     time += omp_get_wtime() - t0;
@@ -174,7 +174,7 @@ void Preprocess::avia_handler(const livox_ros_driver::CustomMsg::ConstPtr &msg)
               || (abs(pl_full[i].z - pl_full[i-1].z) > 1e-7)
               && (pl_full[i].x * pl_full[i].x + pl_full[i].y * pl_full[i].y + pl_full[i].z * pl_full[i].z > (blind * blind)))
           {
-            pl_surf.push_back(pl_full[i]);
+            pl_surf.push_back(pl_full[i]);//加入平面点容器中
           }
         }
       }
@@ -317,7 +317,7 @@ void Preprocess::velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg)
       }
     }
 
-    if(feature_enabled)
+    if(feature_enabled)//如果要求提取点云特征
     {
       for (int i = 0; i < N_SCANS; i++)
       {
@@ -392,12 +392,11 @@ void Preprocess::velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg)
         give_feature(pl, types);
       }
     }
-    else
+    else//不提取点云特征
     {
       for (int i = 0; i < plsize; i++)
       {
         PointType added_pt;
-        // cout<<"!!!!!!"<<i<<" "<<plsize<<endl;
         
         added_pt.normal_x = 0;
         added_pt.normal_y = 0;
@@ -764,7 +763,7 @@ void Preprocess::give_feature(pcl::PointCloud<PointType> &pl, vector<orgtype> &t
     }
   }
 }
-
+//将pcl点云转化为ROS消息发送
 void Preprocess::pub_func(PointCloudXYZI &pl, const ros::Time &ct)
 {
   pl.height = 1; pl.width = pl.size();
