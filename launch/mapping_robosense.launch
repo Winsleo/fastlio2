@@ -1,9 +1,8 @@
 <launch>
   <!-- Launch file for velodyne16 VLP-16 LiDAR -->
-    <node pkg="rs_to_velodyne" name="rs_to_velodyne" type="rs_to_velodyne"  args="XYZIRT XYZIRT"   output="screen"/>
     <arg name="rviz" default="true" />
 
-    <rosparam command="load" file="$(find fast_lio)/config/velodyne.yaml" />
+    <rosparam command="load" file="$(find fast_lio)/config/robosense.yaml" />
 
     <param name="feature_extract_enable" type="bool" value="0"/>
     <param name="point_filter_num" type="int" value="4"/>
