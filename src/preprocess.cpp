@@ -99,7 +99,6 @@ void Preprocess::process(const sensor_msgs::PointCloud2::ConstPtr &msg, PointClo
     break;
   }
   *pcl_out = pl_surf;
-  cout<< pcl_out->size()<<endl;
 }
 //Livox雷达点云数据处理函数
 void Preprocess::avia_handler(const livox_ros_driver::CustomMsg::ConstPtr &msg)
@@ -299,7 +298,6 @@ void Preprocess::velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg)
     pl_surf.clear();
     pl_corn.clear();
     pl_full.clear();
-    cout<<"msg->width="<<msg->width<<"  msg->height="<<msg->height<<"Point_filter_num="<<point_filter_num<<"  ";
     pcl::PointCloud<velodyne_ros::Point> pl_orig;
     pcl::fromROSMsg(*msg, pl_orig);
     int plsize = pl_orig.points.size();
@@ -474,7 +472,6 @@ void Preprocess::robosense_handler(const sensor_msgs::PointCloud2::ConstPtr &msg
     pl_surf.clear();
     pl_corn.clear();
     pl_full.clear();
-    cout<<"msg->width="<<msg->width<<"  msg->height="<<msg->height<<"Point_filter_num="<<point_filter_num<<"  ";
     pcl::PointCloud<robosense_ros::Point> pl_orig;
     pcl::fromROSMsg(*msg, pl_orig);
     int plsize = pl_orig.points.size();
@@ -589,11 +586,13 @@ void Preprocess::robosense_handler(const sensor_msgs::PointCloud2::ConstPtr &msg
     }
     else//不提取点云特征
     {
+      int valid_idx=-1;//加入有效点筛选方法，过滤计数时忽略Nan点
       for (int i = 0; i < plsize; i++)
       {
         if( has_nan(pl_orig.points[i]) ) {
           continue;
         }
+        else valid_idx++;
         PointType added_pt;
         added_pt.normal_x = 0;
         added_pt.normal_y = 0;
@@ -636,7 +635,7 @@ void Preprocess::robosense_handler(const sensor_msgs::PointCloud2::ConstPtr &msg
           time_last[layer]=added_pt.curvature;
         }
 
-        if (i % point_filter_num == 0)
+        if (valid_idx % point_filter_num == 0)//使用有效点计数筛选
         {
           if(added_pt.x*added_pt.x+added_pt.y*added_pt.y+added_pt.z*added_pt.z > (blind * blind))
           {
