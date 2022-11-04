@@ -59,7 +59,7 @@
 #include <livox_ros_driver/CustomMsg.h>
 #include "preprocess.h"
 #include <ikd-Tree/ikd_Tree.h>
-
+#include <sensor_msgs/point_cloud2_iterator.h>
 #define INIT_TIME           (0.1)
 #define LASER_POINT_COV     (0.001)
 #define MAXN                (720000)
@@ -280,7 +280,12 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
     mtx_buffer.lock();
     scan_count ++;
     double preprocess_start_time = omp_get_wtime();
-    if (msg->header.stamp.toSec() < last_timestamp_lidar)
+    double  msg_header_stamp = msg->header.stamp.toSec();
+    if(p_pre->lidar_type == RS32){
+        sensor_msgs::PointCloud2ConstIterator<double> iter_time(*msg,"timestamp");
+        msg_header_stamp = *iter_time;
+    }
+    if (msg_header_stamp < last_timestamp_lidar)
     {
         ROS_ERROR("lidar loop back, clear buffer");
         lidar_buffer.clear();
@@ -289,8 +294,8 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
     PointCloudXYZI::Ptr  ptr(new PointCloudXYZI());
     p_pre->process(msg, ptr);
     lidar_buffer.push_back(ptr);
-    time_buffer.push_back(msg->header.stamp.toSec());
-    last_timestamp_lidar = msg->header.stamp.toSec();
+    time_buffer.push_back(msg_header_stamp);
+    last_timestamp_lidar = msg_header_stamp;
     s_plot11[scan_count] = omp_get_wtime() - preprocess_start_time;
     mtx_buffer.unlock();
     sig_buffer.notify_all();
