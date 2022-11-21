@@ -2,7 +2,7 @@ common:
     lid_topic:  "/rslidar_points"
     imu_topic:  "/imu/data"
     time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
-    time_offset_lidar_to_imu: 0.0 # Time offset between lidar and IMU calibrated by other algorithms, e.g. LI-Init (can be found in README).
+    time_offset_lidar_to_imu: -0.026092 # Time offset between lidar and IMU calibrated by other algorithms, e.g. LI-Init (can be found in README).
                                   # This param will take effect no matter what time_sync_en is. So if the time offset is not known exactly, please set as 0.0
 
 preprocess:
@@ -22,10 +22,10 @@ mapping:
     det_range:     100.0
     extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic,
     # from lidar to IMU
-    extrinsic_T: [ -0.00230593, -0.00279901, 0.20975]
-    extrinsic_R: [-0.999987, -0.00182104, -0.00456148, 
-                  0.00185446, -0.99997, -0.00733234, 
-                  -0.00454799, -0.00734071, 0.999963]  
+    extrinsic_T: [0.083212, -0.010810, 0.185322]
+    extrinsic_R: [0.999958 , 0.008981 , 0.002000,  
+                  -0.008960 , 0.999903 , -0.010619, 
+                  -0.002096 , 0.010601 , 0.999942]
                          
  
 
