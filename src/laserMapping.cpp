@@ -60,6 +60,12 @@
 #include "preprocess.h"
 #include <ikd-Tree/ikd_Tree.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
+
+#define NODELET
+#ifdef NODELET
+#include "laserMapping.h"
+#endif
+
 #define INIT_TIME           (0.1)
 #define LASER_POINT_COV     (0.001)
 #define MAXN                (720000)
@@ -474,7 +480,7 @@ void map_incremental()
     kdtree_incremental_time = omp_get_wtime() - st_time;
 }
 
-PointCloudXYZI::Ptr pcl_wait_pub(new PointCloudXYZI(500000, 1));
+// PointCloudXYZI::Ptr pcl_wait_pub(new PointCloudXYZI(500000, 1));
 PointCloudXYZI::Ptr pcl_wait_save(new PointCloudXYZI());
 void publish_frame_world(const ros::Publisher & pubLaserCloudFull)
 {
@@ -490,11 +496,17 @@ void publish_frame_world(const ros::Publisher & pubLaserCloudFull)
             RGBpointBodyToWorld(&laserCloudFullRes->points[i], \
                                 &laserCloudWorld->points[i]);
         }
-
+#ifdef NODELET
+        sensor_msgs::PointCloud2Ptr laserCloudmsg(new sensor_msgs::PointCloud2());
+        pcl::toROSMsg(*laserCloudWorld, *laserCloudmsg);
+        laserCloudmsg->header.stamp = ros::Time().fromSec(lidar_end_time);
+        laserCloudmsg->header.frame_id = "camera_init";
+#else
         sensor_msgs::PointCloud2 laserCloudmsg;
         pcl::toROSMsg(*laserCloudWorld, laserCloudmsg);
         laserCloudmsg.header.stamp = ros::Time().fromSec(lidar_end_time);
         laserCloudmsg.header.frame_id = "camera_init";
+#endif
         pubLaserCloudFull.publish(laserCloudmsg);
         publish_count -= PUBFRAME_PERIOD;
     }
@@ -618,6 +630,7 @@ void publish_odometry(const ros::Publisher & pubOdomAftMapped)
     q.setZ(odomAftMapped.pose.pose.orientation.z);
     transform.setRotation( q );
     br.sendTransform( tf::StampedTransform( transform, odomAftMapped.header.stamp, "camera_init", "body" ) );
+    pubOdomAftMapped.publish(odomAftMapped); 
 }
 
 void publish_path(const ros::Publisher pubPath)
@@ -754,9 +767,16 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
     solve_time += omp_get_wtime() - solve_start_;
 }
 
+#ifdef NODELET
+int mainLIOFunction()
+{
+    int argc; char** argv;
+    ros::init(argc, argv, "laserMapping");
+#else
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "laserMapping");
+#endif
     ros::NodeHandle nh;
 
     nh.param<bool>("publish/path_en",path_en, true);
@@ -896,30 +916,30 @@ int main(int argc, char** argv)
 
             flg_EKF_inited = (Measures.lidar_beg_time - first_lidar_time) < INIT_TIME ? \
                             false : true;
-            /*** Segment the map in lidar FOV ***/
+            /*** Segment the map in lidar FOV 动态调整局部地图，在拿到eskf前馈结果后***/
             lasermap_fov_segment();
 
             /*** downsample the feature points in a scan ***/
-            downSizeFilterSurf.setInputCloud(feats_undistort);
-            downSizeFilterSurf.filter(*feats_down_body);
+            downSizeFilterSurf.setInputCloud(feats_undistort);//获取去畸变后的点云数据
+            downSizeFilterSurf.filter(*feats_down_body);//滤波降采样后的点云数据
             t1 = omp_get_wtime();
-            feats_down_size = feats_down_body->points.size();
+            feats_down_size = feats_down_body->points.size();//记录滤波后的点云数量
             /*** initialize the map kdtree ***/
             if(ikdtree.Root_Node == nullptr)
             {
                 if(feats_down_size > 5)
                 {
-                    ikdtree.set_downsample_param(filter_size_map_min);
-                    feats_down_world->resize(feats_down_size);
+                    ikdtree.set_downsample_param(filter_size_map_min);//设置ikd_tree的降采样参数
+                    feats_down_world->resize(feats_down_size);//将下采样得到的地图点大小与body系大小一致
                     for(int i = 0; i < feats_down_size; i++)
                     {
-                        pointBodyToWorld(&(feats_down_body->points[i]), &(feats_down_world->points[i]));
+                        pointBodyToWorld(&(feats_down_body->points[i]), &(feats_down_world->points[i]));//将下采样得到的地图点转换为世界系下的点云
                     }
-                    ikdtree.Build(feats_down_world->points);
+                    ikdtree.Build(feats_down_world->points);//从零构建ikd树
                 }
                 continue;
             }
-            int featsFromMapNum = ikdtree.validnum();
+            int featsFromMapNum = ikdtree.validnum();// 获取ikd tree中的有效节点数，无效点就是被打了deleted标签的点
             kdtree_size_st = ikdtree.size();
             
             // cout<<"[ mapping ]: In num: "<<feats_undistort->points.size()<<" downsamp "<<feats_down_size<<" Map num: "<<featsFromMapNum<<"effect num:"<<effct_feat_num<<endl;
@@ -940,14 +960,14 @@ int main(int argc, char** argv)
 
             if(0) // If you need to see map point, change to "if(1)"
             {
-                PointVector ().swap(ikdtree.PCL_Storage);
-                ikdtree.flatten(ikdtree.Root_Node, ikdtree.PCL_Storage, NOT_RECORD);
+                PointVector ().swap(ikdtree.PCL_Storage);//释放PCL_Storage的内存
+                ikdtree.flatten(ikdtree.Root_Node, ikdtree.PCL_Storage, NOT_RECORD);//把树展平用于展示
                 featsFromMap->clear();
                 featsFromMap->points = ikdtree.PCL_Storage;
             }
 
-            pointSearchInd_surf.resize(feats_down_size);
-            Nearest_Points.resize(feats_down_size);
+            pointSearchInd_surf.resize(feats_down_size);//搜索索引
+            Nearest_Points.resize(feats_down_size);//将降采样处理后的点云用于搜索最近点
             int  rematch_num = 0;
             bool nearest_search_en = true; //
 
@@ -956,7 +976,7 @@ int main(int argc, char** argv)
             /*** iterated state estimation ***/
             double t_update_start = omp_get_wtime();
             double solve_H_time = 0;
-            kf.update_iterated_dyn_share_modified(LASER_POINT_COV, solve_H_time);
+            kf.update_iterated_dyn_share_modified(LASER_POINT_COV, solve_H_time);//迭代卡尔曼滤波更新，更新地图信息
             state_point = kf.get_x();
             euler_cur = SO3ToEuler(state_point.rot);
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
@@ -972,15 +992,15 @@ int main(int argc, char** argv)
 
             /*** add the feature points to map kdtree ***/
             t3 = omp_get_wtime();
-            map_incremental();
+            map_incremental();//利用更新后的状态增量式加入kdtree
             t5 = omp_get_wtime();
             
             /******* Publish points *******/
             if (path_en)                         publish_path(pubPath);
             if (scan_pub_en || pcd_save_en)      publish_frame_world(pubLaserCloudFull);
             if (scan_pub_en && scan_body_pub_en) publish_frame_body(pubLaserCloudFull_body);
-            // publish_effect_world(pubLaserCloudEffect);
-            // publish_map(pubLaserCloudMap);
+            publish_effect_world(pubLaserCloudEffect);
+            publish_map(pubLaserCloudMap);
 
             /*** Debug variables ***/
             if (runtime_pos_log)
